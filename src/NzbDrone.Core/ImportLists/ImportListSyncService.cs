@@ -110,11 +110,11 @@ namespace NzbDrone.Core.ImportLists
                 return BuildConfigFromImportList(importList);
             }
 
-            var monitorExisting = importList.ShouldMonitor switch
+            var monitorExistingMode = importList.ShouldMonitor switch
             {
-                ImportListMonitorType.SpecificBook => 2,
-                ImportListMonitorType.EntireAuthor => 1,
-                _ => 0
+                ImportListMonitorType.SpecificBook => MonitorTypes.SpecificBook,
+                ImportListMonitorType.EntireAuthor => MonitorTypes.All,
+                _ => MonitorTypes.None
             };
 
             var monitorAudiobooks = settings.MonitorAudiobooks;
@@ -160,10 +160,6 @@ namespace NzbDrone.Core.ImportLists
 
             var config = new MonitoringConfig
             {
-                MonitorNewItems = importList.ShouldMonitor != ImportListMonitorType.None,
-                MonitorExisting = importList.ShouldMonitorExisting,
-                MonitorFuture = false,
-
                 CreateAudiobook = monitorAudiobooks,
                 CreateEbook = monitorEbooks,
 
@@ -174,10 +170,12 @@ namespace NzbDrone.Core.ImportLists
                 AudiobookRootFolderPath = monitorAudiobooks ? audiobookRootFolderPath : null,
                 EbookRootFolderPath = monitorEbooks ? ebookRootFolderPath : null,
 
-                AudiobookMonitorExisting = monitorAudiobooks ? monitorExisting : 0,
-                EbookMonitorExisting = monitorEbooks ? monitorExisting : 0,
-                AudiobookMonitorFuture = false,
-                EbookMonitorFuture = false,
+                AudiobookMonitored = monitorAudiobooks ? audiobookRootFolderSettings?.Monitored : null,
+                AudiobookMonitorNewItems = monitorAudiobooks ? importList.MonitorNewItems : null,
+                AudiobookMonitorExistingMode = monitorAudiobooks ? monitorExistingMode : MonitorTypes.None,
+                EbookMonitored = monitorEbooks ? ebookRootFolderSettings?.Monitored : null,
+                EbookMonitorNewItems = monitorEbooks ? importList.MonitorNewItems : null,
+                EbookMonitorExistingMode = monitorEbooks ? monitorExistingMode : MonitorTypes.None,
 
                 AudiobookTags = audiobookTags,
                 EbookTags = ebookTags,
@@ -197,6 +195,8 @@ namespace NzbDrone.Core.ImportLists
                 config.EbookBooksToMonitor = monitorLists.ebookBooks?.ToList();
             }
 
+            EnableRequestedMediaGates(config);
+
             return config;
         }
 
@@ -211,11 +211,11 @@ namespace NzbDrone.Core.ImportLists
                 return BuildConfigFromImportList(importList);
             }
 
-            var monitorExisting = importList.ShouldMonitor switch
+            var monitorExistingMode = importList.ShouldMonitor switch
             {
-                ImportListMonitorType.SpecificBook => 2,
-                ImportListMonitorType.EntireAuthor => 1,
-                _ => 0
+                ImportListMonitorType.SpecificBook => MonitorTypes.SpecificBook,
+                ImportListMonitorType.EntireAuthor => MonitorTypes.All,
+                _ => MonitorTypes.None
             };
 
             var monitorAudiobooks = settings.MonitorAudiobooks;
@@ -261,10 +261,6 @@ namespace NzbDrone.Core.ImportLists
 
             var config = new MonitoringConfig
             {
-                MonitorNewItems = importList.ShouldMonitor != ImportListMonitorType.None,
-                MonitorExisting = importList.ShouldMonitorExisting,
-                MonitorFuture = false,
-
                 CreateAudiobook = monitorAudiobooks,
                 CreateEbook = monitorEbooks,
 
@@ -275,10 +271,12 @@ namespace NzbDrone.Core.ImportLists
                 AudiobookRootFolderPath = monitorAudiobooks ? audiobookRootFolderPath : null,
                 EbookRootFolderPath = monitorEbooks ? ebookRootFolderPath : null,
 
-                AudiobookMonitorExisting = monitorAudiobooks ? monitorExisting : 0,
-                EbookMonitorExisting = monitorEbooks ? monitorExisting : 0,
-                AudiobookMonitorFuture = false,
-                EbookMonitorFuture = false,
+                AudiobookMonitored = monitorAudiobooks ? audiobookRootFolderSettings?.Monitored : null,
+                AudiobookMonitorNewItems = monitorAudiobooks ? importList.MonitorNewItems : null,
+                AudiobookMonitorExistingMode = monitorAudiobooks ? monitorExistingMode : MonitorTypes.None,
+                EbookMonitored = monitorEbooks ? ebookRootFolderSettings?.Monitored : null,
+                EbookMonitorNewItems = monitorEbooks ? importList.MonitorNewItems : null,
+                EbookMonitorExistingMode = monitorEbooks ? monitorExistingMode : MonitorTypes.None,
 
                 AudiobookTags = audiobookTags,
                 EbookTags = ebookTags,
@@ -297,6 +295,8 @@ namespace NzbDrone.Core.ImportLists
                 config.AudiobookBooksToMonitor = monitorLists.audiobookBooks?.ToList();
                 config.EbookBooksToMonitor = monitorLists.ebookBooks?.ToList();
             }
+
+            EnableRequestedMediaGates(config);
 
             return config;
         }
@@ -377,9 +377,24 @@ namespace NzbDrone.Core.ImportLists
                     config.EbookBooksToMonitor.Add(item.bookProviderId);
                 }
             }
+
+            EnableRequestedMediaGates(config);
         }
 
-        private static MonitoringConfig BuildConfigFromImportList(ImportListDefinition importList)
+        private static void EnableRequestedMediaGates(MonitoringConfig config)
+        {
+            if (config?.AudiobookBooksToMonitor?.Any() == true)
+            {
+                config.AudiobookMonitored = true;
+            }
+
+            if (config?.EbookBooksToMonitor?.Any() == true)
+            {
+                config.EbookMonitored = true;
+            }
+        }
+
+        private MonitoringConfig BuildConfigFromImportList(ImportListDefinition importList)
         {
             if (importList == null)
             {
@@ -387,12 +402,29 @@ namespace NzbDrone.Core.ImportLists
             }
 
             var tags = importList.Tags != null ? new HashSet<int>(importList.Tags) : new HashSet<int>();
+            var audiobookRootFolderSettings = ResolveRootFolderSettings(importList.RootFolderPath, BookMediaType.Audiobook);
+            var ebookRootFolderSettings = ResolveRootFolderSettings(importList.RootFolderPath, BookMediaType.Ebook);
 
             var config = new MonitoringConfig
             {
-                MonitorNewItems = importList.ShouldMonitor != ImportListMonitorType.None, // For backward compatibility
-                MonitorExisting = importList.ShouldMonitorExisting,
-                MonitorFuture = importList.ShouldMonitor != ImportListMonitorType.None,
+                CreateAudiobook = audiobookRootFolderSettings.IsConfigured,
+                CreateEbook = ebookRootFolderSettings.IsConfigured,
+                AudiobookMonitored = audiobookRootFolderSettings.IsConfigured ? audiobookRootFolderSettings.Monitored : null,
+                AudiobookMonitorNewItems = audiobookRootFolderSettings.IsConfigured ? importList.MonitorNewItems : null,
+                AudiobookMonitorExistingMode = audiobookRootFolderSettings.IsConfigured ? importList.ShouldMonitor switch
+                {
+                    ImportListMonitorType.SpecificBook => MonitorTypes.SpecificBook,
+                    ImportListMonitorType.EntireAuthor => MonitorTypes.All,
+                    _ => MonitorTypes.None
+                } : null,
+                EbookMonitored = ebookRootFolderSettings.IsConfigured ? ebookRootFolderSettings.Monitored : null,
+                EbookMonitorNewItems = ebookRootFolderSettings.IsConfigured ? importList.MonitorNewItems : null,
+                EbookMonitorExistingMode = ebookRootFolderSettings.IsConfigured ? importList.ShouldMonitor switch
+                {
+                    ImportListMonitorType.SpecificBook => MonitorTypes.SpecificBook,
+                    ImportListMonitorType.EntireAuthor => MonitorTypes.All,
+                    _ => MonitorTypes.None
+                } : null,
                 AudiobookQualityProfileId = importList.QualityProfileId,
                 EbookQualityProfileId = importList.QualityProfileId,
                 AudiobookMetadataProfileId = importList.MetadataProfileId,
@@ -405,6 +437,53 @@ namespace NzbDrone.Core.ImportLists
             };
 
             return config;
+        }
+
+        private bool ApplyImportListMonitoringToExistingAuthor(Author author, ImportListDefinition importList)
+        {
+            if (author == null ||
+                importList == null ||
+                !importList.ShouldMonitorExisting ||
+                importList.ShouldMonitor != ImportListMonitorType.EntireAuthor)
+            {
+                return false;
+            }
+
+            var hardcoverSettings = GetHardcoverLibrarySettings(importList);
+            var goodreadsSettings = GetGoodreadsSettings(importList);
+            var monitorAudiobooks = hardcoverSettings?.MonitorAudiobooks ?? goodreadsSettings?.MonitorAudiobooks ?? true;
+            var monitorEbooks = hardcoverSettings?.MonitorEbooks ?? goodreadsSettings?.MonitorEbooks ?? true;
+            var changed = false;
+
+            if (importList.ShouldMonitor == ImportListMonitorType.EntireAuthor)
+            {
+                var books = _bookService.GetBooksByAuthor(author.Id) ?? new List<Book>();
+                var booksToUpdate = new List<Book>();
+
+                foreach (var book in books)
+                {
+                    if (book.MediaType == BookMediaType.Audiobook && monitorAudiobooks && !book.AudiobookMonitored)
+                    {
+                        book.AudiobookMonitored = true;
+                        book.EbookMonitored = false;
+                        booksToUpdate.Add(book);
+                    }
+                    else if (book.MediaType == BookMediaType.Ebook && monitorEbooks && !book.EbookMonitored)
+                    {
+                        book.AudiobookMonitored = false;
+                        book.EbookMonitored = true;
+                        booksToUpdate.Add(book);
+                    }
+                }
+
+                if (booksToUpdate.Any())
+                {
+                    _bookService.UpdateMany(booksToUpdate);
+                    changed = true;
+                }
+            }
+
+            return changed;
         }
 
         private static string NormalizeProviderId(string value, string defaultPrefix)
@@ -1602,10 +1681,8 @@ namespace NzbDrone.Core.ImportLists
                             {
                                 stats.MarkExistingAuthor(authorProviderId);
 
-                                if (importList.ShouldMonitorExisting && !existingAuthor.Monitored)
+                                if (ApplyImportListMonitoringToExistingAuthor(existingAuthor, importList))
                                 {
-                                    existingAuthor.Monitored = true;
-                                    _authorService.UpdateAuthor(existingAuthor);
                                     addedAuthorIds.Add(existingAuthor.Id);
 
                                     if (importList.ShouldSearch && importList.ShouldMonitor == ImportListMonitorType.EntireAuthor)
@@ -1859,11 +1936,8 @@ namespace NzbDrone.Core.ImportLists
                     {
                         stats.MarkExistingAuthor(authorProviderId);
 
-                        if (importList.ShouldMonitorExisting && !existingAuthor.Monitored)
+                        if (ApplyImportListMonitoringToExistingAuthor(existingAuthor, importList))
                         {
-                            // Update existing author monitoring
-                            existingAuthor.Monitored = true;
-                            _authorService.UpdateAuthor(existingAuthor);
                             addedAuthorIds.Add(existingAuthor.Id);
 
                             if (importList.ShouldSearch && importList.ShouldMonitor == ImportListMonitorType.EntireAuthor)
@@ -2001,7 +2075,7 @@ namespace NzbDrone.Core.ImportLists
 
                                 foreach (var book in books)
                                 {
-                                    var wasMonitored = book.AudiobookMonitored || book.EbookMonitored;
+                                    var wasEligible = book.IsMonitoredWithAuthor(author);
 
                                     if (book.MediaType == BookMediaType.Audiobook)
                                     {
@@ -2020,7 +2094,7 @@ namespace NzbDrone.Core.ImportLists
 
                                     if (importList.ShouldSearch &&
                                         importList.ShouldMonitor == ImportListMonitorType.SpecificBook &&
-                                        !wasMonitored &&
+                                        !wasEligible &&
                                         (book.AudiobookMonitored || book.EbookMonitored) &&
                                         book.Id > 0)
                                     {
@@ -2034,12 +2108,7 @@ namespace NzbDrone.Core.ImportLists
                                     booksMonitored++;
                                 }
 
-                                // Ensure the author is monitored if we are monitoring any books
-                                if (books.Any(b => b.AudiobookMonitored || b.EbookMonitored) && !author.Monitored)
-                                {
-                                    author.Monitored = true;
-                                    _authorService.UpdateAuthor(author);
-                                }
+                                EnsureAuthorMonitoringForBooks(author, books);
 
                                 if (!addedAuthorIds.Contains(author.Id))
                                 {
@@ -2090,7 +2159,7 @@ namespace NzbDrone.Core.ImportLists
 
                                     foreach (var book in books)
                                     {
-                                        var wasMonitored = book.AudiobookMonitored || book.EbookMonitored;
+                                        var wasEligible = book.IsMonitoredWithAuthor(author);
 
                                         if (desiredMediaTypeFromHardcover == BookMediaType.Audiobook)
                                         {
@@ -2116,7 +2185,7 @@ namespace NzbDrone.Core.ImportLists
 
                                         if (importList.ShouldSearch &&
                                             importList.ShouldMonitor == ImportListMonitorType.SpecificBook &&
-                                            !wasMonitored &&
+                                            !wasEligible &&
                                             (book.AudiobookMonitored || book.EbookMonitored) &&
                                             book.Id > 0)
                                         {
@@ -2130,11 +2199,7 @@ namespace NzbDrone.Core.ImportLists
                                         booksMonitored++;
                                     }
 
-                                    if (books.Any(b => b.AudiobookMonitored || b.EbookMonitored) && !author.Monitored)
-                                    {
-                                        author.Monitored = true;
-                                        _authorService.UpdateAuthor(author);
-                                    }
+                                    EnsureAuthorMonitoringForBooks(author, books);
 
                                     if (!addedAuthorIds.Contains(author.Id))
                                     {
@@ -2153,7 +2218,7 @@ namespace NzbDrone.Core.ImportLists
 
                                 foreach (var book in fallbackBooks)
                                 {
-                                    var wasMonitored = book.AudiobookMonitored || book.EbookMonitored;
+                                    var wasEligible = book.IsMonitoredWithAuthor(author);
 
                                     if (book.MediaType == BookMediaType.Audiobook)
                                     {
@@ -2172,7 +2237,7 @@ namespace NzbDrone.Core.ImportLists
 
                                     if (importList.ShouldSearch &&
                                         importList.ShouldMonitor == ImportListMonitorType.SpecificBook &&
-                                        !wasMonitored &&
+                                        !wasEligible &&
                                         (book.AudiobookMonitored || book.EbookMonitored) &&
                                         book.Id > 0)
                                     {
@@ -2186,11 +2251,7 @@ namespace NzbDrone.Core.ImportLists
                                     booksMonitored++;
                                 }
 
-                                if (fallbackBooks.Any(b => b.AudiobookMonitored || b.EbookMonitored) && !author.Monitored)
-                                {
-                                    author.Monitored = true;
-                                    _authorService.UpdateAuthor(author);
-                                }
+                                EnsureAuthorMonitoringForBooks(author, fallbackBooks);
 
                                 if (!addedAuthorIds.Contains(author.Id))
                                 {
@@ -2213,7 +2274,7 @@ namespace NzbDrone.Core.ImportLists
 
                                 foreach (var book in fallbackBooks)
                                 {
-                                    var wasMonitored = book.AudiobookMonitored || book.EbookMonitored;
+                                    var wasEligible = book.IsMonitoredWithAuthor(author);
 
                                     if (book.MediaType == BookMediaType.Audiobook)
                                     {
@@ -2232,7 +2293,7 @@ namespace NzbDrone.Core.ImportLists
 
                                     if (importList.ShouldSearch &&
                                         importList.ShouldMonitor == ImportListMonitorType.SpecificBook &&
-                                        !wasMonitored &&
+                                        !wasEligible &&
                                         (book.AudiobookMonitored || book.EbookMonitored) &&
                                         book.Id > 0)
                                     {
@@ -2246,11 +2307,7 @@ namespace NzbDrone.Core.ImportLists
                                     booksMonitored++;
                                 }
 
-                                if (fallbackBooks.Any(b => b.AudiobookMonitored || b.EbookMonitored) && !author.Monitored)
-                                {
-                                    author.Monitored = true;
-                                    _authorService.UpdateAuthor(author);
-                                }
+                                EnsureAuthorMonitoringForBooks(author, fallbackBooks);
 
                                 if (!addedAuthorIds.Contains(author.Id))
                                 {
@@ -2364,7 +2421,7 @@ namespace NzbDrone.Core.ImportLists
                                 continue;
                             }
 
-                            var wasTargetBookMonitored = targetBook.AudiobookMonitored || targetBook.EbookMonitored;
+                            var wasTargetBookEligible = targetBook.IsMonitoredWithAuthor(author);
 
                             if (targetBook.MediaType == BookMediaType.Audiobook)
                             {
@@ -2382,7 +2439,7 @@ namespace NzbDrone.Core.ImportLists
 
                             if (importList.ShouldSearch &&
                                 importList.ShouldMonitor == ImportListMonitorType.SpecificBook &&
-                                !wasTargetBookMonitored &&
+                                !wasTargetBookEligible &&
                                 (targetBook.AudiobookMonitored || targetBook.EbookMonitored) &&
                                 targetBook.Id > 0)
                             {
@@ -2391,11 +2448,7 @@ namespace NzbDrone.Core.ImportLists
 
                             reservedIds.Add(targetBook.Id);
 
-                            if (!author.Monitored)
-                            {
-                                author.Monitored = true;
-                                _authorService.UpdateAuthor(author);
-                            }
+                            EnsureAuthorMonitoringForBooks(author, new[] { targetBook });
 
                             if (!addedAuthorIds.Contains(author.Id))
                             {
@@ -2478,7 +2531,7 @@ namespace NzbDrone.Core.ImportLists
 
                             foreach (var book in targetBooks)
                             {
-                                var wasMonitored = book.AudiobookMonitored || book.EbookMonitored;
+                                var wasEligible = book.IsMonitoredWithAuthor(author);
 
                                 if (book.MediaType == BookMediaType.Audiobook)
                                 {
@@ -2493,7 +2546,7 @@ namespace NzbDrone.Core.ImportLists
 
                                 if (importList.ShouldSearch &&
                                     importList.ShouldMonitor == ImportListMonitorType.SpecificBook &&
-                                    !wasMonitored &&
+                                    !wasEligible &&
                                     (book.AudiobookMonitored || book.EbookMonitored) &&
                                     book.Id > 0)
                                 {
@@ -2504,11 +2557,7 @@ namespace NzbDrone.Core.ImportLists
                             _bookService.UpdateMany(targetBooks);
                             booksMonitored++;
 
-                            if (targetBooks.Any(b => b.AudiobookMonitored || b.EbookMonitored) && !author.Monitored)
-                            {
-                                author.Monitored = true;
-                                _authorService.UpdateAuthor(author);
-                            }
+                            EnsureAuthorMonitoringForBooks(author, targetBooks);
 
                             if (!addedAuthorIds.Contains(author.Id))
                             {
@@ -2795,6 +2844,39 @@ namespace NzbDrone.Core.ImportLists
                         report.BookProviderId, report.Author, report.Book);
                 }
             }
+        }
+
+        private void EnsureAuthorMonitoringForBooks(Author author, IEnumerable<Book> books)
+        {
+            if (author == null || books == null)
+            {
+                return;
+            }
+
+            var monitoredBooks = books.Where(book => book != null).ToList();
+            var enableAudiobooks = monitoredBooks.Any(book =>
+                book.MediaType == BookMediaType.Audiobook && book.AudiobookMonitored);
+            var enableEbooks = monitoredBooks.Any(book =>
+                book.MediaType == BookMediaType.Ebook && book.EbookMonitored);
+
+            if ((!enableAudiobooks || author.AudiobookMonitored == true) &&
+                (!enableEbooks || author.EbookMonitored == true))
+            {
+                return;
+            }
+
+            if (enableAudiobooks)
+            {
+                author.AudiobookMonitored = true;
+            }
+
+            if (enableEbooks)
+            {
+                author.EbookMonitored = true;
+            }
+
+            author.Monitored = author.IsMonitoredFromMediaSettings();
+            _authorService.UpdateAuthor(author);
         }
 
         public void Execute(ImportListSyncCommand message)
