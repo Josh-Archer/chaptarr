@@ -1483,13 +1483,13 @@ namespace NzbDrone.Core.ImportLists
         {
             _logger.ProgressInfo($"Starting Import List Refresh for List {definition.Name}");
 
-            var listItems = _listFetcherAndParser.FetchSingleList(definition).ToList();
+            var importList = _importListFactory.GetInstance(definition);
+            var listItems = _listFetcherAndParser.FetchSingleList(definition, importList).ToList();
 
             var processed = ProcessListItems(listItems);
 
             try
             {
-                var importList = _importListFactory.GetInstance(definition);
                 importList?.CommitState();
             }
             catch (Exception e)
