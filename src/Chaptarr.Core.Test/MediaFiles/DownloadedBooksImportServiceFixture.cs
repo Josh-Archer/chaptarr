@@ -2848,5 +2848,103 @@ namespace Chaptarr.Core.Test.MediaFiles
                 Directory.Delete(tempDir, true);
             }
         }
+
+        [Test]
+        public void should_extract_archive_when_download_client_item_has_scoped_archive_file()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "chaptarr-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var zipPath = Path.Combine(tempDir, "Book.zip");
+            File.WriteAllBytes(zipPath, new byte[] { 1, 2, 3, 4 });
+
+            var archiveService = new RecordingArchiveService();
+
+            try
+            {
+                var service = new DownloadedBooksImportService(
+                    new StubDiskProvider(),
+                    new StubDiskScanService(),
+                    new StubFileMatchingService(),
+                    new StubMetadataTagService(),
+                    new RecordingImportApprovedBooks(),
+                    DispatchProxy.Create<IBookService, ThrowingProxy<IBookService>>(),
+                    DispatchProxy.Create<IAuthorService, ThrowingProxy<IAuthorService>>(),
+                    DispatchProxy.Create<IEditionService, ThrowingProxy<IEditionService>>(),
+                    DispatchProxy.Create<IImportOrchestrator, ThrowingProxy<IImportOrchestrator>>(),
+                    new StubAuthorLibraryService(),
+                    new StubRootFolderService(),
+                    ConfigServiceTestProxy.Create(),
+                    DispatchProxy.Create<IHistoryService, ThrowingProxy<IHistoryService>>(),
+                    DispatchProxy.Create<IEventAggregator, ThrowingProxy<IEventAggregator>>(),
+                    DispatchProxy.Create<NzbDrone.Common.EnvironmentInfo.IRuntimeInfo, ThrowingProxy<NzbDrone.Common.EnvironmentInfo.IRuntimeInfo>>(),
+                    DispatchProxy.Create<IMediaInfoExtractor, ThrowingProxy<IMediaInfoExtractor>>(),
+                    LogManager.GetCurrentClassLogger(),
+                    archiveService);
+
+                var downloadClientItem = new DownloadClientItem
+                {
+                    FilePaths = new List<string> { zipPath }
+                };
+
+                service.ProcessPath(tempDir, ImportMode.Auto, author: null, downloadClientItem: downloadClientItem);
+
+                Assert.That(archiveService.Extractions, Has.Count.EqualTo(1));
+                Assert.That(archiveService.Extractions[0].CompressedFile, Is.EqualTo(zipPath));
+                Assert.That(archiveService.Extractions[0].Destination, Is.EqualTo(tempDir));
+            }
+            finally
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Test]
+        public void should_not_extract_archive_when_download_client_item_scope_excludes_archive()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "chaptarr-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var zipPath = Path.Combine(tempDir, "Book.zip");
+            var nfoPath = Path.Combine(tempDir, "Book.nfo");
+            File.WriteAllBytes(zipPath, new byte[] { 1, 2, 3, 4 });
+            File.WriteAllBytes(nfoPath, new byte[] { 1, 2, 3, 4 });
+
+            var archiveService = new RecordingArchiveService();
+
+            try
+            {
+                var service = new DownloadedBooksImportService(
+                    new StubDiskProvider(),
+                    new StubDiskScanService(),
+                    new StubFileMatchingService(),
+                    new StubMetadataTagService(),
+                    new RecordingImportApprovedBooks(),
+                    DispatchProxy.Create<IBookService, ThrowingProxy<IBookService>>(),
+                    DispatchProxy.Create<IAuthorService, ThrowingProxy<IAuthorService>>(),
+                    DispatchProxy.Create<IEditionService, ThrowingProxy<IEditionService>>(),
+                    DispatchProxy.Create<IImportOrchestrator, ThrowingProxy<IImportOrchestrator>>(),
+                    new StubAuthorLibraryService(),
+                    new StubRootFolderService(),
+                    ConfigServiceTestProxy.Create(),
+                    DispatchProxy.Create<IHistoryService, ThrowingProxy<IHistoryService>>(),
+                    DispatchProxy.Create<IEventAggregator, ThrowingProxy<IEventAggregator>>(),
+                    DispatchProxy.Create<NzbDrone.Common.EnvironmentInfo.IRuntimeInfo, ThrowingProxy<NzbDrone.Common.EnvironmentInfo.IRuntimeInfo>>(),
+                    DispatchProxy.Create<IMediaInfoExtractor, ThrowingProxy<IMediaInfoExtractor>>(),
+                    LogManager.GetCurrentClassLogger(),
+                    archiveService);
+
+                var downloadClientItem = new DownloadClientItem
+                {
+                    FilePaths = new List<string> { nfoPath }
+                };
+
+                service.ProcessPath(tempDir, ImportMode.Auto, author: null, downloadClientItem: downloadClientItem);
+
+                Assert.That(archiveService.Extractions, Is.Empty);
+            }
+            finally
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
     }
 }

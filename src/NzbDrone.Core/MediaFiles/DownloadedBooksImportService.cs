@@ -168,11 +168,17 @@ namespace NzbDrone.Core.MediaFiles
 
             if (!mediaFiles.Any())
             {
-                ExtractArchivesInFolder(directoryInfo);
-                visibleFiles = _diskProvider.GetFileInfos(directoryInfo.FullName, true);
-                mediaFiles = visibleFiles
-                    .Where(f => MediaFileExtensions.AllExtensions.Contains(f.Extension))
-                    .ToList();
+                var archives = fileListScoped
+                    ? visibleFiles.Where(f => IsSupportedArchive(f.FullName)).Select(f => f.FullName).ToList()
+                    : _diskProvider.GetFiles(directoryInfo.FullName, true).Where(IsSupportedArchive).ToList();
+
+                if (archives.Any() && ExtractArchives(directoryInfo, archives))
+                {
+                    visibleFiles = _diskProvider.GetFileInfos(directoryInfo.FullName, true);
+                    mediaFiles = visibleFiles
+                        .Where(f => MediaFileExtensions.AllExtensions.Contains(f.Extension))
+                        .ToList();
+                }
             }
 
             if (!mediaFiles.Any())
@@ -1494,23 +1500,24 @@ namespace NzbDrone.Core.MediaFiles
             return ProcessFile(fileInfo, importMode, author, downloadClientItem, remoteBook, requireDefaultRootFolderForMissingAuthors: requireDefaultRootFolderForMissingAuthors);
         }
 
-        private void ExtractArchivesInFolder(IDirectoryInfo directoryInfo)
+        private bool ExtractArchives(IDirectoryInfo directoryInfo, IEnumerable<string> archives)
         {
-            var archives = _diskProvider.GetFiles(directoryInfo.FullName, true)
-                .Where(IsSupportedArchive)
-                .ToList();
+            var extractedAny = false;
 
             foreach (var archive in archives)
             {
                 try
                 {
                     _archiveService.Extract(archive, directoryInfo.FullName);
+                    extractedAny = true;
                 }
                 catch (Exception e)
                 {
                     _logger.Warn(e, "Failed to extract archive during import: {0}", archive);
                 }
             }
+
+            return extractedAny;
         }
 
         private static bool IsSupportedArchive(string path)
